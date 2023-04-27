@@ -4,6 +4,7 @@ import Dict
 import Elm.Parser
 import Elm.Processing
 import Elm.Syntax.DeclarationV2 exposing (DeclarationV2(..))
+import Elm.Syntax.FullModuleName exposing (FullModuleName)
 import Elm.Syntax.NodeV2 as NodeV2 exposing (NodeV2(..), TypedMeta)
 import Elm.TypeInference
 import Elm.TypeInference.Error exposing (Error)
@@ -21,6 +22,7 @@ type TestError
 getExprType : String -> Result TestError Type
 getExprType exprCode =
     let
+        moduleCode : String
         moduleCode =
             """
 module Main exposing (main)
@@ -28,6 +30,7 @@ main = {EXPR}
 """
                 |> String.replace "{EXPR}" exprCode
 
+        mainModule : FullModuleName
         mainModule =
             ( "Main", [] )
     in
