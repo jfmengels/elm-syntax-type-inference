@@ -30,7 +30,6 @@ import Elm.Syntax.PatternV2
         , TypedPattern
         )
 import Elm.Syntax.Signature exposing (Signature)
-import Elm.Syntax.TypeAnnotation as TypeAnnotation
 import Elm.Syntax.VarName exposing (VarName)
 import Elm.TypeInference.Error exposing (Error(..))
 import Elm.TypeInference.State as State exposing (TIState)
@@ -88,45 +87,46 @@ generateExprEquations files thisFile ((NodeV2 { type_ } expr) as typedExpr) =
             -> List (LocatedNode (RecordSetter TypedMeta))
             -> TIState ( Dict VarName MonoType, List TypedExpr, List TypeEquation )
         recordSetters label fieldSetters =
-            State.do (State.traverse (always State.getNextIdAndTick) fieldSetters) <| \fieldIds ->
-            let
-                fields : Dict VarName MonoType
-                fields =
-                    List.map2
-                        (\fieldSetterNode fieldId ->
-                            let
-                                ( fieldNameNode, _ ) =
-                                    NodeV2.value fieldSetterNode
-                            in
-                            ( NodeV2.value fieldNameNode
-                            , Type.id_ fieldId
-                            )
-                        )
-                        fieldSetters
-                        fieldIds
-                        |> Dict.fromList
+            State.do (State.traverse (always State.getNextIdAndTick) fieldSetters) <|
+                \fieldIds ->
+                    let
+                        fields : Dict VarName MonoType
+                        fields =
+                            List.map2
+                                (\fieldSetterNode fieldId ->
+                                    let
+                                        ( fieldNameNode, _ ) =
+                                            NodeV2.value fieldSetterNode
+                                    in
+                                    ( NodeV2.value fieldNameNode
+                                    , Type.id_ fieldId
+                                    )
+                                )
+                                fieldSetters
+                                fieldIds
+                                |> Dict.fromList
 
-                subexprs : List TypedExpr
-                subexprs =
-                    List.map (NodeV2.value >> Tuple.second) fieldSetters
+                        subexprs : List TypedExpr
+                        subexprs =
+                            List.map (NodeV2.value >> Tuple.second) fieldSetters
 
-                equations : List TypeEquation
-                equations =
-                    List.map2
-                        (\fieldSetterNode fieldId ->
-                            let
-                                ( _, fieldExpr ) =
-                                    NodeV2.value fieldSetterNode
-                            in
-                            ( NodeV2.type_ fieldExpr
-                            , Type.id fieldId
-                            , label ++ ": record field"
-                            )
-                        )
-                        fieldSetters
-                        fieldIds
-            in
-            State.pure ( fields, subexprs, equations )
+                        equations : List TypeEquation
+                        equations =
+                            List.map2
+                                (\fieldSetterNode fieldId ->
+                                    let
+                                        ( _, fieldExpr ) =
+                                            NodeV2.value fieldSetterNode
+                                    in
+                                    ( NodeV2.type_ fieldExpr
+                                    , Type.id fieldId
+                                    , label ++ ": record field"
+                                    )
+                                )
+                                fieldSetters
+                                fieldIds
+                    in
+                    State.pure ( fields, subexprs, equations )
     in
     case expr of
         UnitExpr ->
@@ -136,60 +136,67 @@ generateExprEquations files thisFile ((NodeV2 { type_ } expr) as typedExpr) =
             impossibleExpr
 
         Application ((fn :: args) as exprs) ->
-            State.do State.getNextIdAndTick <| \resultId ->
-            State.do (State.traverse (always State.getNextIdAndTick) args) <| \argIds ->
-            let
-                fnType =
-                    argIds
-                        |> List.foldr
-                            (\leftArgType rightArgType ->
-                                Function
-                                    { from = Type.id_ leftArgType
-                                    , to = rightArgType
-                                    }
-                            )
-                            (Type.id_ resultId)
-                        |> Type.mono
-            in
-            append
-                (( type_, Type.id resultId, "Application = its result" )
-                    :: ( NodeV2.type_ fn, fnType, "Application: first is fn" )
-                    :: List.map2
-                        (\arg_ argId ->
-                            ( NodeV2.type_ arg_
-                            , Type.id argId
-                            , "Application: args = their id"
-                            )
-                        )
-                        args
-                        argIds
-                )
-                (list f exprs)
+            State.do State.getNextIdAndTick <|
+                \resultId ->
+                    State.do (State.traverse (always State.getNextIdAndTick) args) <|
+                        \argIds ->
+                            let
+                                fnType =
+                                    argIds
+                                        |> List.foldr
+                                            (\leftArgType rightArgType ->
+                                                Function
+                                                    { from = Type.id_ leftArgType
+                                                    , to = rightArgType
+                                                    }
+                                            )
+                                            (Type.id_ resultId)
+                                        |> Type.mono
+                            in
+                            append
+                                (( type_, Type.id resultId, "Application = its result" )
+                                    :: ( NodeV2.type_ fn, fnType, "Application: first is fn" )
+                                    :: List.map2
+                                        (\arg_ argId ->
+                                            ( NodeV2.type_ arg_
+                                            , Type.id argId
+                                            , "Application: args = their id"
+                                            )
+                                        )
+                                        args
+                                        argIds
+                                )
+                                (list f exprs)
 
         OperatorApplication operator _ e1 e2 ->
-            State.do (StateLookup.findModuleOfVar files thisFile Nothing operator) <| \moduleName ->
-            State.do State.getNextIdAndTick <| \resultId ->
-            State.do State.getNextIdAndTick <| \e1Id ->
-            State.do State.getNextIdAndTick <| \e2Id ->
-            let
-                fnType =
-                    Type.mono <|
-                        Function
-                            { from = Type.id_ e1Id
-                            , to =
-                                Function
-                                    { from = Type.id_ e2Id
-                                    , to = Type.id_ resultId
-                                    }
-                            }
-            in
-            State.do (State.addVarType moduleName operator fnType) <| \() ->
-            append
-                [ ( type_, Type.id resultId, "Op application = its result" )
-                , ( NodeV2.type_ e1, Type.id e1Id, "Op application: left" )
-                , ( NodeV2.type_ e2, Type.id e2Id, "Op application: right" )
-                ]
-                (list f [ e1, e2 ])
+            State.do (StateLookup.findModuleOfVar files thisFile Nothing operator) <|
+                \moduleName ->
+                    State.do State.getNextIdAndTick <|
+                        \resultId ->
+                            State.do State.getNextIdAndTick <|
+                                \e1Id ->
+                                    State.do State.getNextIdAndTick <|
+                                        \e2Id ->
+                                            let
+                                                fnType =
+                                                    Type.mono <|
+                                                        Function
+                                                            { from = Type.id_ e1Id
+                                                            , to =
+                                                                Function
+                                                                    { from = Type.id_ e2Id
+                                                                    , to = Type.id_ resultId
+                                                                    }
+                                                            }
+                                            in
+                                            State.do (State.addVarType moduleName operator fnType) <|
+                                                \() ->
+                                                    append
+                                                        [ ( type_, Type.id resultId, "Op application = its result" )
+                                                        , ( NodeV2.type_ e1, Type.id e1Id, "Op application: left" )
+                                                        , ( NodeV2.type_ e2, Type.id e2Id, "Op application: right" )
+                                                        ]
+                                                        (list f [ e1, e2 ])
 
         FunctionOrValue moduleName varName ->
             case
@@ -200,12 +207,14 @@ generateExprEquations files thisFile ((NodeV2 { type_ } expr) as typedExpr) =
                     varName
             of
                 Ok (Just fullModuleName) ->
-                    State.do (State.addVarType fullModuleName varName type_) <| \() ->
-                    finish []
+                    State.do (State.addVarType fullModuleName varName type_) <|
+                        \() ->
+                            finish []
 
                 Ok Nothing ->
-                    State.do (State.lookupEnv (File.moduleName thisFile) varName) <| \varType ->
-                    finish [ ( type_, Type.mono varType, "FunctionOrValue: var from env" ) ]
+                    State.do (State.lookupEnv (File.moduleName thisFile) varName) <|
+                        \varType ->
+                            finish [ ( type_, Type.mono varType, "FunctionOrValue: var from env" ) ]
 
                 Err err ->
                     State.error err
@@ -220,47 +229,55 @@ generateExprEquations files thisFile ((NodeV2 { type_ } expr) as typedExpr) =
 
         PrefixOperator operator ->
             -- operator is a function of two arguments
-            State.do (StateLookup.findModuleOfVar files thisFile Nothing operator) <| \moduleName ->
-            State.do (State.addVarType moduleName operator type_) <| \() ->
-            State.do State.getNextIdAndTick <| \firstArgId ->
-            State.do State.getNextIdAndTick <| \secondArgId ->
-            State.do State.getNextIdAndTick <| \resultId ->
-            finish
-                [ ( type_
-                  , Type.mono <|
-                        Function
-                            { from = Type.id_ firstArgId
-                            , to =
-                                Function
-                                    { from = Type.id_ secondArgId
-                                    , to = Type.id_ resultId
-                                    }
-                            }
-                  , "Prefix operator: is a fn"
-                  )
-                ]
+            State.do (StateLookup.findModuleOfVar files thisFile Nothing operator) <|
+                \moduleName ->
+                    State.do (State.addVarType moduleName operator type_) <|
+                        \() ->
+                            State.do State.getNextIdAndTick <|
+                                \firstArgId ->
+                                    State.do State.getNextIdAndTick <|
+                                        \secondArgId ->
+                                            State.do State.getNextIdAndTick <|
+                                                \resultId ->
+                                                    finish
+                                                        [ ( type_
+                                                          , Type.mono <|
+                                                                Function
+                                                                    { from = Type.id_ firstArgId
+                                                                    , to =
+                                                                        Function
+                                                                            { from = Type.id_ secondArgId
+                                                                            , to = Type.id_ resultId
+                                                                            }
+                                                                    }
+                                                          , "Prefix operator: is a fn"
+                                                          )
+                                                        ]
 
         Operator _ ->
             impossibleExpr
 
         Integer _ ->
-            State.do State.getNextIdAndTick <| \numberId ->
-            finish [ ( type_, Type.number numberId, "Int" ) ]
+            State.do State.getNextIdAndTick <|
+                \numberId ->
+                    finish [ ( type_, Type.number numberId, "Int" ) ]
 
         Hex _ ->
-            State.do State.getNextIdAndTick <| \numberId ->
-            finish [ ( type_, Type.number numberId, "Hex" ) ]
+            State.do State.getNextIdAndTick <|
+                \numberId ->
+                    finish [ ( type_, Type.number numberId, "Hex" ) ]
 
         Floatable _ ->
             finish [ ( type_, Type.mono Float, "Float" ) ]
 
         Negation e1 ->
-            State.do State.getNextIdAndTick <| \numberId ->
-            f e1
-                |> append
-                    [ ( type_, NodeV2.type_ e1, "Negation = inner" )
-                    , ( type_, Type.number numberId, "Negation = number" )
-                    ]
+            State.do State.getNextIdAndTick <|
+                \numberId ->
+                    f e1
+                        |> append
+                            [ ( type_, NodeV2.type_ e1, "Negation = inner" )
+                            , ( type_, Type.number numberId, "Negation = number" )
+                            ]
 
         Literal _ ->
             finish [ ( type_, Type.mono String, "String" ) ]
@@ -269,39 +286,44 @@ generateExprEquations files thisFile ((NodeV2 { type_ } expr) as typedExpr) =
             finish [ ( type_, Type.mono Char, "Char" ) ]
 
         TupledExpression ([ NodeV2 m1 _, NodeV2 m2 _ ] as exprs) ->
-            State.do State.getNextIdAndTick <| \firstId ->
-            State.do State.getNextIdAndTick <| \secondId ->
-            list f exprs
-                |> append
-                    [ ( type_
-                      , Type.mono <|
-                            Tuple
-                                (Type.id_ firstId)
-                                (Type.id_ secondId)
-                      , "Tuple: top"
-                      )
-                    , ( m1.type_, Type.id firstId, "Tuple: first" )
-                    , ( m2.type_, Type.id secondId, "Tuple: second" )
-                    ]
+            State.do State.getNextIdAndTick <|
+                \firstId ->
+                    State.do State.getNextIdAndTick <|
+                        \secondId ->
+                            list f exprs
+                                |> append
+                                    [ ( type_
+                                      , Type.mono <|
+                                            Tuple
+                                                (Type.id_ firstId)
+                                                (Type.id_ secondId)
+                                      , "Tuple: top"
+                                      )
+                                    , ( m1.type_, Type.id firstId, "Tuple: first" )
+                                    , ( m2.type_, Type.id secondId, "Tuple: second" )
+                                    ]
 
         TupledExpression ([ NodeV2 m1 _, NodeV2 m2 _, NodeV2 m3 _ ] as exprs) ->
-            State.do State.getNextIdAndTick <| \firstId ->
-            State.do State.getNextIdAndTick <| \secondId ->
-            State.do State.getNextIdAndTick <| \thirdId ->
-            list f exprs
-                |> append
-                    [ ( type_
-                      , Type.mono <|
-                            Tuple3
-                                (Type.id_ firstId)
-                                (Type.id_ secondId)
-                                (Type.id_ thirdId)
-                      , "Tuple3: top"
-                      )
-                    , ( m1.type_, Type.id firstId, "Tuple3: first" )
-                    , ( m2.type_, Type.id secondId, "Tuple3: second" )
-                    , ( m3.type_, Type.id thirdId, "Tuple3: third" )
-                    ]
+            State.do State.getNextIdAndTick <|
+                \firstId ->
+                    State.do State.getNextIdAndTick <|
+                        \secondId ->
+                            State.do State.getNextIdAndTick <|
+                                \thirdId ->
+                                    list f exprs
+                                        |> append
+                                            [ ( type_
+                                              , Type.mono <|
+                                                    Tuple3
+                                                        (Type.id_ firstId)
+                                                        (Type.id_ secondId)
+                                                        (Type.id_ thirdId)
+                                              , "Tuple3: top"
+                                              )
+                                            , ( m1.type_, Type.id firstId, "Tuple3: first" )
+                                            , ( m2.type_, Type.id secondId, "Tuple3: second" )
+                                            , ( m3.type_, Type.id thirdId, "Tuple3: third" )
+                                            ]
 
         TupledExpression _ ->
             impossibleExpr
@@ -381,148 +403,168 @@ generateExprEquations files thisFile ((NodeV2 { type_ } expr) as typedExpr) =
                             in
                             State.addBinding varName (Type.id declId)
 
-                        LetDestructuring pattern e ->
+                        LetDestructuring pattern _ ->
                             addPatternBinding ( pattern, declId )
             in
-            State.do (State.traverse (always State.getNextIdAndTick) declarations) <| \declIds ->
-            let
-                declsWithIds : List ( LetDeclaration TypedMeta, Id )
-                declsWithIds =
-                    List.map2 (\declNode declId -> ( NodeV2.value declNode, declId )) declarations declIds
-            in
-            State.do (State.traverse generateDecl declsWithIds) <| \declEqsLists ->
-            State.do (State.traverse addDeclBinding declsWithIds) <| \_ ->
-            State.do (f expression) <| \exprEqs ->
-            -- TODO each decl needs to be generalized
-            -- TODO decls need to be put into expr's env before inferring
-            --
-            -- TODO let bindingType = generalize (substituteEnv subst typeEnv) (substituteMono subst bindingMonoType)
-            -- TODO (exprType,exprEqs) <- withBinding (name, bindingType) <| withSubstitution subst (infer expression)
-            finish <|
-                ( type_, exprType, "Let = its body" )
-                    :: List.fastConcat declEqsLists
-                    ++ exprEqs
+            State.do (State.traverse (always State.getNextIdAndTick) declarations) <|
+                \declIds ->
+                    let
+                        declsWithIds : List ( LetDeclaration TypedMeta, Id )
+                        declsWithIds =
+                            List.map2 (\declNode declId -> ( NodeV2.value declNode, declId )) declarations declIds
+                    in
+                    State.do (State.traverse generateDecl declsWithIds) <|
+                        \declEqsLists ->
+                            State.do (State.traverse addDeclBinding declsWithIds) <|
+                                \_ ->
+                                    State.do (f expression) <|
+                                        \exprEqs ->
+                                            -- TODO each decl needs to be generalized
+                                            -- TODO decls need to be put into expr's env before inferring
+                                            --
+                                            -- TODO let bindingType = generalize (substituteEnv subst typeEnv) (substituteMono subst bindingMonoType)
+                                            -- TODO (exprType,exprEqs) <- withBinding (name, bindingType) <| withSubstitution subst (infer expression)
+                                            finish <|
+                                                ( type_, exprType, "Let = its body" )
+                                                    :: List.fastConcat declEqsLists
+                                                    ++ exprEqs
 
         CaseExpression _ ->
             Debug.todo "generate eqs: case"
 
         LambdaExpression { args, expression } ->
-            State.do (State.traverse (always State.getNextIdAndTick) args) <| \argIds ->
-            State.do State.getNextIdAndTick <| \resultId ->
-            let
-                fnType =
-                    argIds
-                        |> List.foldr
-                            (\leftArgType rightArgType ->
-                                Function
-                                    { from = Type.id_ leftArgType
-                                    , to = rightArgType
-                                    }
-                            )
-                            (Type.id_ resultId)
-                        |> Type.mono
-            in
-            State.do (list (generatePatternEquations files thisFile) args) <| \argPatternEqs ->
-            State.do (State.traverse addPatternBinding (List.map2 Tuple.pair args argIds)) <| \_ ->
-            State.do (f expression) <| \bodyEqs ->
-            finish <|
-                ( type_, fnType, "Lambda: is a function" )
-                    :: ( NodeV2.type_ expression, Type.id resultId, "Lambda: expr = result" )
-                    :: List.map2
-                        (\arg argId ->
-                            ( NodeV2.type_ arg
-                            , Type.id argId
-                            , "Lambda: args = their id"
-                            )
-                        )
-                        args
-                        argIds
-                    ++ bodyEqs
-                    ++ argPatternEqs
+            State.do (State.traverse (always State.getNextIdAndTick) args) <|
+                \argIds ->
+                    State.do State.getNextIdAndTick <|
+                        \resultId ->
+                            let
+                                fnType =
+                                    argIds
+                                        |> List.foldr
+                                            (\leftArgType rightArgType ->
+                                                Function
+                                                    { from = Type.id_ leftArgType
+                                                    , to = rightArgType
+                                                    }
+                                            )
+                                            (Type.id_ resultId)
+                                        |> Type.mono
+                            in
+                            State.do (list (generatePatternEquations files thisFile) args) <|
+                                \argPatternEqs ->
+                                    State.do (State.traverse addPatternBinding (List.map2 Tuple.pair args argIds)) <|
+                                        \_ ->
+                                            State.do (f expression) <|
+                                                \bodyEqs ->
+                                                    finish <|
+                                                        ( type_, fnType, "Lambda: is a function" )
+                                                            :: ( NodeV2.type_ expression, Type.id resultId, "Lambda: expr = result" )
+                                                            :: List.map2
+                                                                (\arg argId ->
+                                                                    ( NodeV2.type_ arg
+                                                                    , Type.id argId
+                                                                    , "Lambda: args = their id"
+                                                                    )
+                                                                )
+                                                                args
+                                                                argIds
+                                                            ++ bodyEqs
+                                                            ++ argPatternEqs
 
         RecordExpr fieldSetters ->
-            State.do (recordSetters "Record" fieldSetters) <| \( fields, subexprs, fieldEquations ) ->
-            append
-                (( type_, Type.mono <| Record fields, "Record: is a record" )
-                    :: fieldEquations
-                )
-                (list f subexprs)
+            State.do (recordSetters "Record" fieldSetters) <|
+                \( fields, subexprs, fieldEquations ) ->
+                    append
+                        (( type_, Type.mono <| Record fields, "Record: is a record" )
+                            :: fieldEquations
+                        )
+                        (list f subexprs)
 
         ListExpr exprs ->
-            State.do (list f exprs) <| \exprsEquations ->
-            State.do State.getNextIdAndTick <| \listItemId ->
-            finish
-                (( type_, Type.mono <| List <| Type.id_ listItemId, "List: is a list" )
-                    :: exprsEquations
-                    ++ List.map
-                        (\(NodeV2 m _) ->
-                            ( m.type_
-                            , Type.id listItemId
-                            , "List: pin list type param to all inner"
-                            )
-                        )
-                        exprs
-                )
+            State.do (list f exprs) <|
+                \exprsEquations ->
+                    State.do State.getNextIdAndTick <|
+                        \listItemId ->
+                            finish
+                                (( type_, Type.mono <| List <| Type.id_ listItemId, "List: is a list" )
+                                    :: exprsEquations
+                                    ++ List.map
+                                        (\(NodeV2 m _) ->
+                                            ( m.type_
+                                            , Type.id listItemId
+                                            , "List: pin list type param to all inner"
+                                            )
+                                        )
+                                        exprs
+                                )
 
         RecordAccess record fieldNameNode ->
-            State.do State.getNextIdAndTick <| \extensibleRecordId ->
-            State.do State.getNextIdAndTick <| \resultId ->
-            finish
-                [ ( type_, Type.id resultId, "Record access = the field = the result" )
-                , ( NodeV2.type_ record
-                  , Type.mono <|
-                        ExtensibleRecord
-                            { type_ = Type.id_ extensibleRecordId
-                            , fields =
-                                Dict.singleton
-                                    (NodeV2.value fieldNameNode)
-                                    (Type.id_ resultId)
-                            }
-                  , "Record access: left is a record"
-                  )
-                ]
+            State.do State.getNextIdAndTick <|
+                \extensibleRecordId ->
+                    State.do State.getNextIdAndTick <|
+                        \resultId ->
+                            finish
+                                [ ( type_, Type.id resultId, "Record access = the field = the result" )
+                                , ( NodeV2.type_ record
+                                  , Type.mono <|
+                                        ExtensibleRecord
+                                            { type_ = Type.id_ extensibleRecordId
+                                            , fields =
+                                                Dict.singleton
+                                                    (NodeV2.value fieldNameNode)
+                                                    (Type.id_ resultId)
+                                            }
+                                  , "Record access: left is a record"
+                                  )
+                                ]
 
         RecordAccessFunction fieldName ->
-            State.do State.getNextIdAndTick <| \recordId ->
-            State.do State.getNextIdAndTick <| \resultId ->
-            finish
-                [ ( type_
-                  , Type.mono <|
-                        Function
-                            { from =
-                                ExtensibleRecord
-                                    { type_ = Type.id_ recordId
-                                    , fields =
-                                        -- the fieldName is ".a", not "a", so let's sanitize that
-                                        Dict.singleton (String.dropLeft 1 fieldName) (Type.id_ resultId)
-                                    }
-                            , to = Type.id_ resultId
-                            }
-                  , "Record access fn: is a function"
-                  )
-                ]
+            State.do State.getNextIdAndTick <|
+                \recordId ->
+                    State.do State.getNextIdAndTick <|
+                        \resultId ->
+                            finish
+                                [ ( type_
+                                  , Type.mono <|
+                                        Function
+                                            { from =
+                                                ExtensibleRecord
+                                                    { type_ = Type.id_ recordId
+                                                    , fields =
+                                                        -- the fieldName is ".a", not "a", so let's sanitize that
+                                                        Dict.singleton (String.dropLeft 1 fieldName) (Type.id_ resultId)
+                                                    }
+                                            , to = Type.id_ resultId
+                                            }
+                                  , "Record access fn: is a function"
+                                  )
+                                ]
 
         RecordUpdateExpression recordVarNode fieldSetters ->
             let
                 recordVar =
                     NodeV2.value recordVarNode
             in
-            State.do State.getNextIdAndTick <| \recordId ->
-            State.do (StateLookup.findModuleOfVar files thisFile Nothing recordVar) <| \moduleName ->
-            State.do (State.addVarType moduleName recordVar (Type.id recordId)) <| \() ->
-            State.do (recordSetters "Record update" fieldSetters) <| \( fields, subexprs, fieldEquations ) ->
-            append
-                (( type_
-                 , Type.mono <|
-                    ExtensibleRecord
-                        { type_ = Type.id_ recordId
-                        , fields = fields
-                        }
-                 , "Record update: is record with at least that field"
-                 )
-                    :: fieldEquations
-                )
-                (list f subexprs)
+            State.do State.getNextIdAndTick <|
+                \recordId ->
+                    State.do (StateLookup.findModuleOfVar files thisFile Nothing recordVar) <|
+                        \moduleName ->
+                            State.do (State.addVarType moduleName recordVar (Type.id recordId)) <|
+                                \() ->
+                                    State.do (recordSetters "Record update" fieldSetters) <|
+                                        \( fields, subexprs, fieldEquations ) ->
+                                            append
+                                                (( type_
+                                                 , Type.mono <|
+                                                    ExtensibleRecord
+                                                        { type_ = Type.id_ recordId
+                                                        , fields = fields
+                                                        }
+                                                 , "Record update: is record with at least that field"
+                                                 )
+                                                    :: fieldEquations
+                                                )
+                                                (list f subexprs)
 
         GLSLExpression code ->
             {- TODO This currently only correctly detects "simple" declarations:
@@ -676,50 +718,57 @@ generatePatternEquations files thisFile ((NodeV2 { type_ } pattern) as typedPatt
             finish [ ( type_, Type.mono String, "String pattern" ) ]
 
         IntPattern _ ->
-            State.do State.getNextIdAndTick <| \numberId ->
-            finish [ ( type_, Type.number numberId, "Int pattern" ) ]
+            State.do State.getNextIdAndTick <|
+                \numberId ->
+                    finish [ ( type_, Type.number numberId, "Int pattern" ) ]
 
         HexPattern _ ->
-            State.do State.getNextIdAndTick <| \numberId ->
-            finish [ ( type_, Type.number numberId, "Hex pattern" ) ]
+            State.do State.getNextIdAndTick <|
+                \numberId ->
+                    finish [ ( type_, Type.number numberId, "Hex pattern" ) ]
 
         FloatPattern _ ->
             finish [ ( type_, Type.mono Float, "Float pattern" ) ]
 
         TuplePattern ([ NodeV2 m1 _, NodeV2 m2 _ ] as patterns) ->
-            State.do State.getNextIdAndTick <| \firstId ->
-            State.do State.getNextIdAndTick <| \secondId ->
-            list f patterns
-                |> append
-                    [ ( type_
-                      , Type.mono <|
-                            Tuple
-                                (Type.id_ firstId)
-                                (Type.id_ secondId)
-                      , "Tuple pattern: top"
-                      )
-                    , ( m1.type_, Type.id firstId, "Tuple pattern: first" )
-                    , ( m2.type_, Type.id secondId, "Tuple pattern: second" )
-                    ]
+            State.do State.getNextIdAndTick <|
+                \firstId ->
+                    State.do State.getNextIdAndTick <|
+                        \secondId ->
+                            list f patterns
+                                |> append
+                                    [ ( type_
+                                      , Type.mono <|
+                                            Tuple
+                                                (Type.id_ firstId)
+                                                (Type.id_ secondId)
+                                      , "Tuple pattern: top"
+                                      )
+                                    , ( m1.type_, Type.id firstId, "Tuple pattern: first" )
+                                    , ( m2.type_, Type.id secondId, "Tuple pattern: second" )
+                                    ]
 
         TuplePattern ([ NodeV2 m1 _, NodeV2 m2 _, NodeV2 m3 _ ] as patterns) ->
-            State.do State.getNextIdAndTick <| \firstId ->
-            State.do State.getNextIdAndTick <| \secondId ->
-            State.do State.getNextIdAndTick <| \thirdId ->
-            list f patterns
-                |> append
-                    [ ( type_
-                      , Type.mono <|
-                            Tuple3
-                                (Type.id_ firstId)
-                                (Type.id_ secondId)
-                                (Type.id_ thirdId)
-                      , "Tuple3 pattern: top"
-                      )
-                    , ( m1.type_, Type.id firstId, "Tuple3 pattern: first" )
-                    , ( m2.type_, Type.id secondId, "Tuple3 pattern: second" )
-                    , ( m3.type_, Type.id thirdId, "Tuple3 pattern: third" )
-                    ]
+            State.do State.getNextIdAndTick <|
+                \firstId ->
+                    State.do State.getNextIdAndTick <|
+                        \secondId ->
+                            State.do State.getNextIdAndTick <|
+                                \thirdId ->
+                                    list f patterns
+                                        |> append
+                                            [ ( type_
+                                              , Type.mono <|
+                                                    Tuple3
+                                                        (Type.id_ firstId)
+                                                        (Type.id_ secondId)
+                                                        (Type.id_ thirdId)
+                                              , "Tuple3 pattern: top"
+                                              )
+                                            , ( m1.type_, Type.id firstId, "Tuple3 pattern: first" )
+                                            , ( m2.type_, Type.id secondId, "Tuple3 pattern: second" )
+                                            , ( m3.type_, Type.id thirdId, "Tuple3 pattern: third" )
+                                            ]
 
         TuplePattern _ ->
             let
@@ -766,13 +815,14 @@ generatePatternEquations files thisFile ((NodeV2 { type_ } pattern) as typedPatt
                 State.getNextIdAndTick
 
         UnConsPattern ((NodeV2 m1 _) as p1) ((NodeV2 m2 _) as p2) ->
-            State.do State.getNextIdAndTick <| \listItemId ->
-            list f [ p1, p2 ]
-                |> append
-                    [ ( type_, Type.mono <| List <| Type.id_ listItemId, "UnCons pattern: result" )
-                    , ( type_, m2.type_, "UnCons pattern: result same as tail" )
-                    , ( m1.type_, Type.id listItemId, "UnCons pattern: head pins list type param" )
-                    ]
+            State.do State.getNextIdAndTick <|
+                \listItemId ->
+                    list f [ p1, p2 ]
+                        |> append
+                            [ ( type_, Type.mono <| List <| Type.id_ listItemId, "UnCons pattern: result" )
+                            , ( type_, m2.type_, "UnCons pattern: result same as tail" )
+                            , ( m1.type_, Type.id listItemId, "UnCons pattern: head pins list type param" )
+                            ]
 
         ListPattern patterns ->
             let
@@ -798,17 +848,19 @@ generatePatternEquations files thisFile ((NodeV2 { type_ } pattern) as typedPatt
                         (NodeV2 mx _) :: _ ->
                             [ ( mx.type_, Type.id listItemId, "ListPattern: first item pins list type param" ) ]
             in
-            State.do State.getNextIdAndTick <| \listItemId ->
-            list f patterns
-                |> append
-                    (( type_, Type.mono <| List <| Type.id_ listItemId, "ListPattern: result" )
-                        :: firstItemEq listItemId
-                        ++ homogenousListEqs
-                    )
+            State.do State.getNextIdAndTick <|
+                \listItemId ->
+                    list f patterns
+                        |> append
+                            (( type_, Type.mono <| List <| Type.id_ listItemId, "ListPattern: result" )
+                                :: firstItemEq listItemId
+                                ++ homogenousListEqs
+                            )
 
         VarPattern _ ->
-            State.do State.getNextIdAndTick <| \patternId ->
-            finish [ ( type_, Type.id patternId, "VarPattern" ) ]
+            State.do State.getNextIdAndTick <|
+                \patternId ->
+                    finish [ ( type_, Type.id patternId, "VarPattern" ) ]
 
         NamedPattern customType args ->
             State.map3
@@ -844,8 +896,9 @@ generatePatternEquations files thisFile ((NodeV2 { type_ } pattern) as typedPatt
 
         AsPattern p1 varName ->
             -- TODO did this help?
-            State.do (State.addBinding (NodeV2.value varName) type_) <| \() ->
-            f p1
+            State.do (State.addBinding (NodeV2.value varName) type_) <|
+                \() ->
+                    f p1
 
         ParenthesizedPattern p1 ->
             f p1
@@ -864,8 +917,9 @@ addPatternBinding ( arg, argId ) =
             fields
                 |> State.traverse
                     (\field ->
-                        State.do State.getNextIdAndTick <| \fieldId ->
-                        State.addBinding (NodeV2.value field) (Type.id fieldId)
+                        State.do State.getNextIdAndTick <|
+                            \fieldId ->
+                                State.addBinding (NodeV2.value field) (Type.id fieldId)
                     )
                 |> State.map (always ())
 

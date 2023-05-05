@@ -4,7 +4,6 @@ import AssocList
 import AssocSet
 import Dict exposing (Dict)
 import Elm.Syntax.FullModuleName exposing (FullModuleName)
-import Elm.Syntax.VarName exposing (VarName)
 import Elm.TypeInference.Error exposing (Error(..))
 import Elm.TypeInference.State as State exposing (TIState)
 import Elm.TypeInference.SubstitutionMap as SubstitutionMap exposing (SubstitutionMap)
@@ -38,10 +37,11 @@ unifyMany typeAliases equations =
                     State.pure subst
 
                 ( t1, t2 ) :: restOfEquations ->
-                    State.do (unify typeAliases t1 t2) <| \subst1 ->
-                    go
-                        (SubstitutionMap.compose subst1 subst)
-                        (List.map (SubstitutionMap.substituteTypeEquation subst1) restOfEquations)
+                    State.do (unify typeAliases t1 t2) <|
+                        \subst1 ->
+                            go
+                                (SubstitutionMap.compose subst1 subst)
+                                (List.map (SubstitutionMap.substituteTypeEquation subst1) restOfEquations)
     in
     go SubstitutionMap.empty equations
 
@@ -53,20 +53,22 @@ unifyManyMono typeAliases eqs =
             State.pure AssocList.empty
 
         ( t1, t2 ) :: eqs_ ->
-            State.do (unifyMono typeAliases t1 t2) <| \su1 ->
-            State.do
-                (unifyManyMono
-                    typeAliases
-                    (List.map
-                        (Tuple.mapBoth
-                            (SubstitutionMap.substituteMono su1)
-                            (SubstitutionMap.substituteMono su1)
+            State.do (unifyMono typeAliases t1 t2) <|
+                \su1 ->
+                    State.do
+                        (unifyManyMono
+                            typeAliases
+                            (List.map
+                                (Tuple.mapBoth
+                                    (SubstitutionMap.substituteMono su1)
+                                    (SubstitutionMap.substituteMono su1)
+                                )
+                                eqs_
+                            )
                         )
-                        eqs_
-                    )
-                )
-            <| \su2 ->
-            State.pure (SubstitutionMap.compose su2 su1)
+                    <|
+                        \su2 ->
+                            State.pure (SubstitutionMap.compose su2 su1)
 
 
 unifyMono : Dict ( FullModuleName, VarName ) MonoType -> MonoType -> MonoType -> TIState SubstitutionMap

@@ -91,7 +91,7 @@ isFunction fromCheck toCheck actual =
 isFunctionWithSignature : String -> Result Error Type -> Bool
 isFunctionWithSignature signature actual =
     case actual of
-        Ok ((Forall [] (Function { from, to })) as type_) ->
+        Ok ((Forall [] (Function _)) as type_) ->
             let
                 (Forall _ mono) =
                     Type.normalize type_
