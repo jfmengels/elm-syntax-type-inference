@@ -661,9 +661,6 @@ generatePatternEquations files thisFile ((NodeV2 { type_ } pattern) as typedPatt
         f : TypedPattern -> TIState (List TypeEquation)
         f =
             generatePatternEquations files thisFile
-
-        impossiblePattern =
-            State.error <| ImpossiblePattern typedPattern
     in
     case pattern of
         AllPattern ->
@@ -725,6 +722,10 @@ generatePatternEquations files thisFile ((NodeV2 { type_ } pattern) as typedPatt
                     ]
 
         TuplePattern _ ->
+            let
+                impossiblePattern =
+                    State.error <| ImpossiblePattern typedPattern
+            in
             impossiblePattern
 
         RecordPattern fields ->

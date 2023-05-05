@@ -596,10 +596,6 @@ fromTypeAnnotation typeAnnotation =
                 ( moduleName, typeName ) =
                     Node.value name
 
-                fullModuleName : FullModuleName
-                fullModuleName =
-                    FullModuleName.fromModuleName_ moduleName
-
                 args : Result TypeAnnotation (List MonoType)
                 args =
                     annotations
@@ -609,6 +605,11 @@ fromTypeAnnotation typeAnnotation =
             args
                 |> Result.map
                     (\args_ ->
+                        let
+                            fullModuleName : FullModuleName
+                            fullModuleName =
+                                FullModuleName.fromModuleName_ moduleName
+                        in
                         UserDefinedType
                             { moduleName = fullModuleName
                             , name = typeName
