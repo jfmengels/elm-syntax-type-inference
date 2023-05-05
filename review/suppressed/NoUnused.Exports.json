@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "automatically created by": "elm-review suppress",
+  "learn more": "elm-review suppress --help",
+  "suppressions": [
+    { "count": 7, "filePath": "src/Elm/TypeInference/State.elm" },
+    { "count": 6, "filePath": "src/Elm/TypeInference/Type.elm" },
+    { "count": 4, "filePath": "src/Elm/Syntax/NodeV2.elm" },
+    { "count": 1, "filePath": "src/Dict/ExtraExtra.elm" },
+    { "count": 1, "filePath": "src/Elm/Syntax/ExpressionV2.elm" },
+    { "count": 1, "filePath": "src/Elm/Syntax/FileV2.elm" },
+    { "count": 1, "filePath": "src/Elm/Syntax/PatternV2.elm" },
+    { "count": 1, "filePath": "src/Elm/TypeInference/SubstitutionMap.elm" },
+    { "count": 1, "filePath": "src/List/ExtraExtra.elm" }
+  ]
+}
