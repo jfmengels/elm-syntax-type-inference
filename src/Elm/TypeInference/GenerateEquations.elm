@@ -771,11 +771,7 @@ generatePatternEquations files thisFile ((NodeV2 { type_ } pattern) as typedPatt
                                             ]
 
         TuplePattern _ ->
-            let
-                impossiblePattern =
-                    State.error <| ImpossiblePattern typedPattern
-            in
-            impossiblePattern
+            State.error <| ImpossiblePattern typedPattern
 
         RecordPattern fields ->
             {- If we're pattern matching some record fields, we're mandating that
