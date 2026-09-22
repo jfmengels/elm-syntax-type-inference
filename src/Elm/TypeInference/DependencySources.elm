@@ -122,7 +122,7 @@ neededSources deps sources =
                     supplied =
                         suppliedModuleNames package sources
 
-                    remaining : List String
+                    remaining : Set String
                     remaining =
                         docsModuleRefs pkg.modules
                             |> List.foldl
@@ -134,15 +134,15 @@ neededSources deps sources =
                                         Set.insert m acc
                                 )
                                 Set.empty
-                            |> Set.toList
-                            |> List.map ModuleNameExtra.dottedToFilePath
                 in
-                case remaining of
-                    [] ->
-                        needsSourcesAcc
+                if Set.isEmpty remaining then
+                    needsSourcesAcc
 
-                    _ :: _ ->
-                        ( package, remaining ) :: needsSourcesAcc
+                else
+                    ( package
+                    , List.map ModuleNameExtra.dottedToFilePath (Set.toList remaining)
+                    )
+                        :: needsSourcesAcc
             )
             []
 
