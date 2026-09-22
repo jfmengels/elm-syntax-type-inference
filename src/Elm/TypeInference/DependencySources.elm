@@ -140,7 +140,7 @@ neededSources deps sources =
 
                 else
                     ( package
-                    , List.map ModuleNameExtra.dottedToFilePath (Set.toList remaining)
+                    , Set.foldr (\m acc -> ModuleNameExtra.dottedToFilePath m :: acc) [] remaining
                     )
                         :: needsSourcesAcc
             )
